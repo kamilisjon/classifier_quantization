@@ -1,0 +1,8 @@
+onnx
+onnxruntime-gpu
+pillow
+numpy
+
+--extra-index-url https://download.pytorch.org/whl/cu128
+torch
+torchvision

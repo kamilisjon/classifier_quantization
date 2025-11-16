@@ -1,4 +1,3 @@
-# evaluate.py
 import argparse
 import os
 import csv
@@ -65,11 +64,12 @@ def main():
     # 0 = VERBOSE, 1 = INFO, 2 = WARNING, 3 = ERROR, 4 = FATAL
     session_options.log_severity_level = 0  # INFO
     session_options.graph_optimization_level = onnxruntime.GraphOptimizationLevel.ORT_DISABLE_ALL
-    os.environ["ORT_TENSORRT_FP16_ENABLE"] = "1"  # Enable FP16 precision
-    os.environ["ORT_TENSORRT_INT8_ENABLE"] = "1"  # Enable INT8 precision
-    os.environ["ORT_TENSORRT_INT8_CALIBRATION_TABLE_NAME"] = str(args.model_path.parent / "calibration.flatbuffers")  # Calibration table name
-    os.environ["ORT_TENSORRT_ENGINE_CACHE_ENABLE"] = "1"
-    provider = ['TensorrtExecutionProvider'] if 'CUDAExecutionProvider' in onnxruntime.get_available_providers() else ['CPUExecutionProvider']
+    provider = [('TensorrtExecutionProvider', {
+        'trt_fp16_enable': False,
+        'trt_int8_enable': False,
+        'trt_int8_calibration_table_name': str(args.model_path.parent / "calibration.flatbuffers")
+    })]
+    provider = ['CUDAExecutionProvider']
     ort_session = onnxruntime.InferenceSession(str(args.model_path), sess_options=session_options, providers=provider)
 
     # Benchmark

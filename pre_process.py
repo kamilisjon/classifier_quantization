@@ -1,4 +1,3 @@
-# image_utils.py
 from pathlib import Path
 from PIL import Image
 import torchvision.transforms as transforms

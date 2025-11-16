@@ -1,10 +1,8 @@
 import argparse
 import time
-import os
 from pathlib import Path
 
 import onnxruntime
-from onnxruntime.quantization import CalibrationDataReader, create_calibrator, write_calibration_table
 import numpy as np
 
 def benchmark(model_path: Path):
@@ -12,12 +10,15 @@ def benchmark(model_path: Path):
     # 0 = VERBOSE, 1 = INFO, 2 = WARNING, 3 = ERROR, 4 = FATAL
     session_options.log_severity_level = 0  # INFO
     session_options.graph_optimization_level = onnxruntime.GraphOptimizationLevel.ORT_DISABLE_ALL
-    os.environ["ORT_TENSORRT_FP16_ENABLE"] = "1"  # Enable FP16 precision
-    os.environ["ORT_TENSORRT_INT8_ENABLE"] = "1"  # Enable INT8 precision
-    os.environ["ORT_TENSORRT_INT8_CALIBRATION_TABLE_NAME"] = str(model_path.parent / "calibration.flatbuffers")  # Calibration table name
-    os.environ["ORT_TENSORRT_ENGINE_CACHE_ENABLE"] = "1"
+
+    provider = [('TensorrtExecutionProvider', {
+        'trt_fp16_enable': True,
+        'trt_int8_enable': True,
+        'trt_int8_calibration_table_name': str(model_path.parent / "calibration.flatbuffers"),
+        'trt_engine_cache_enable': False
+    })]
+
     # provider = ['CUDAExecutionProvider']
-    provider = ['TensorrtExecutionProvider']
     session = onnxruntime.InferenceSession(str(model_path), sess_options=session_options, providers=provider)
     input_name = session.get_inputs()[0].name
 

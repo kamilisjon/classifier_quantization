@@ -11,7 +11,7 @@ import numpy as np
 from pre_process import load_and_preprocess
 
 WARMUP_RUNS_COUNT = 25
-BENCHMARK_RUNS_COUNT = 50
+BENCHMARK_RUNS_COUNT = 100
 IMAGENET_LABELS_FILEPATH = "imagenet_class_index.json"
 
 class ExecProvider(Enum):
@@ -42,7 +42,7 @@ def setup_session(model_path: Path, exec_provider: ExecProvider) -> onnxruntime.
     return onnxruntime.InferenceSession(str(model_path), sess_options=session_options, providers=provider)
 
 
-def benchmark_accuracy(session: onnxruntime.InferenceSession, imagenet_data_path: Path):
+def benchmark_accuracy(session: onnxruntime.InferenceSession, imagenet_data_path: Path, batch_size: int):
     val_dir = imagenet_data_path / 'ILSVRC' / 'Data' / 'CLS-LOC' / "val"
     images = sorted([f for f in val_dir.iterdir() if f.suffix.upper() == '.JPEG'])
 
@@ -60,12 +60,10 @@ def benchmark_accuracy(session: onnxruntime.InferenceSession, imagenet_data_path
             tokens = pred_str.split()
             synsets = [tokens[i] for i in range(0, len(tokens), 5)]
             imageid_to_synsets[image_id] = sorted(set(synsets))
-    print(f"Parsed labels for {len(imageid_to_synsets)} images")
 
     # Map synsets
     with open(IMAGENET_LABELS_FILEPATH, "r") as f:
         class_idx = json.load(f)
-    idx_to_label = {int(k): v[1] for k, v in class_idx.items()}
     synset_to_idx = {v[0]: int(k) for k, v in class_idx.items()}
 
     # Build ground_truth
@@ -79,37 +77,29 @@ def benchmark_accuracy(session: onnxruntime.InferenceSession, imagenet_data_path
         if not gt_indices:
             raise ValueError(f"No mapping for {img_id}")
         ground_truth.append(gt_indices)
-    print(f"Built ground_truth for {len(ground_truth)} images")
 
     # Benchmark
     correct_top1 = correct_top5 = total = 0
-    for i, img_path in enumerate(images):
-        input_tensor = load_and_preprocess(img_path)
+    for start in range(0, len(images), batch_size):
+        end = min(start + batch_size, len(images))
+        batch_paths = images[start:end]
+        input_tensor = load_and_preprocess(batch_paths)
         outputs = session.run(None, {"x": input_tensor})[0]
-        pred = np.argsort(outputs[0])[-5:][::-1]
+        for j, out in enumerate(outputs):
+            i = start + j
+            pred = np.argsort(out)[-5:][::-1]
+            gt_indices = set(ground_truth[i])
 
-        gt_indices = set(ground_truth[i])
-        total += 1
-        if pred[0] in gt_indices:
-            correct_top1 += 1
-        if any(p in gt_indices for p in pred):
-            correct_top5 += 1
+            total += 1
+            if pred[0] in gt_indices:
+                correct_top1 += 1
+            if any(p in gt_indices for p in pred):
+                correct_top5 += 1
 
-        if i < 5:
-            print(f"\nImage: {img_path.name}")
-            print("  GT classes:")
-            for g in sorted(gt_indices):
-                print(f"    idx {g:4d} | {idx_to_label.get(g, 'N/A')}")
-            print("  Top-5:")
-            for rank, p in enumerate(pred, 1):
-                print(f"    {rank}: {p:4d} | {idx_to_label.get(p, 'N/A')}")
+            if i % 1000 == 0:
+                print(f"Processed {i + 1}/{len(images)}")
 
-        if i % 1000 == 0:
-            print(f"Processed {i}/{len(images)}")
-
-    top1_acc = correct_top1 / total * 100
-    top5_acc = correct_top5 / total * 100
-    return top1_acc, top5_acc
+    return correct_top1 / total * 100, correct_top5 / total * 100
 
 def benchmark_speed(session: onnxruntime.InferenceSession, batch_size: int):
     input_data = np.zeros((batch_size, 3, 224, 224), np.float32)
@@ -143,6 +133,6 @@ if __name__ == "__main__":
     for exec_provider in BENCHMARK_EXEC_PROVIDERS:
         session = setup_session(args.model_path, exec_provider)
         speed = benchmark_speed(session, args.batch_size)
-        top1_acc, top5_acc = benchmark_accuracy(session, args.data_path)
+        top1_acc, top5_acc = benchmark_accuracy(session, args.data_path, args.batch_size)
         results[exec_provider] = {"top1_acc": top1_acc, "top5_acc": top5_acc, "speed": round(speed, 3)}
     print(results)

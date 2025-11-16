@@ -12,13 +12,13 @@ class CalibDataReader(CalibrationDataReader):
 
     def get_next(self):
         if self._iter is None: self._iter = iter(self.folder.iterdir())
-        try: return {self.input_name: load_and_preprocess(next(self._iter))}
+        try: return {self.input_name: load_and_preprocess([next(self._iter)])}
         except StopIteration: return None
 
     def rewind(self): self._iter = None
 
 if __name__ == "__main__":
-    model_path = Path("./models/resnet50/resnet50_Opset18_dynamic.onnx")
+    model_path = Path("./models/mobilenetv3_small_075/mobilenetv3_small_075_Opset17_dynamic.onnx")
     calibrate_dataset = Path("C:/Users/kamil/Downloads/calibration_set")
     augmented_model_path = "./augmented_model.onnx"
     calibrator: CalibraterBase = create_calibrator(model_path, [], augmented_model_path=augmented_model_path)

@@ -1,5 +1,4 @@
 import argparse
-import os
 import csv
 import json
 from pathlib import Path
@@ -12,20 +11,13 @@ from pre_process import load_and_preprocess
 IMAGENET_LABELS_FILEPATH = "imagenet_class_index.json"
 
 
-def parse_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("model_path", type=Path)
-    parser.add_argument("data_dir", type=Path)
-    return parser.parse_args()
+def benchmark_accuracy(model_path: Path, imagenet_data_path: Path):
 
-def main():
-    args = parse_args()
-
-    val_dir = args.data_dir / 'ILSVRC' / 'Data' / 'CLS-LOC' / "val"
+    val_dir = imagenet_data_path / 'ILSVRC' / 'Data' / 'CLS-LOC' / "val"
     images = sorted([f for f in val_dir.iterdir() if f.suffix.upper() == '.JPEG'])
 
     # Parse labels
-    labels_csv = args.data_dir / "LOC_val_solution.csv"
+    labels_csv = imagenet_data_path / "LOC_val_solution.csv"
     imageid_to_synsets = {}
     with labels_csv.open("r", newline="") as f:
         reader = csv.DictReader(f)
@@ -67,10 +59,10 @@ def main():
     provider = [('TensorrtExecutionProvider', {
         'trt_fp16_enable': False,
         'trt_int8_enable': False,
-        'trt_int8_calibration_table_name': str(args.model_path.parent / "calibration.flatbuffers")
+        'trt_int8_calibration_table_name': str(model_path.parent / "calibration.flatbuffers")
     })]
     provider = ['CUDAExecutionProvider']
-    ort_session = onnxruntime.InferenceSession(str(args.model_path), sess_options=session_options, providers=provider)
+    ort_session = onnxruntime.InferenceSession(str(model_path), sess_options=session_options, providers=provider)
 
     # Benchmark
     correct_top1 = correct_top5 = total = 0
@@ -103,4 +95,8 @@ def main():
     print(f"\nTop-1: {top1_acc:.2f}% | Top-5: {top5_acc:.2f}%")
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("model_path", type=Path)
+    parser.add_argument("data_dir", type=Path)
+    args = parser.parse_args()
+    benchmark_accuracy(args.model_path, args.data_dir)

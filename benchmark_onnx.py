@@ -1,13 +1,17 @@
 # evaluate.py
 import argparse
+import os
 import csv
 import json
 from pathlib import Path
+
 import numpy as np
-import onnxruntime as ort
+import onnxruntime
+
 from pre_process import load_and_preprocess
 
 IMAGENET_LABELS_FILEPATH = "imagenet_class_index.json"
+
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -57,7 +61,16 @@ def main():
     print(f"Built ground_truth for {len(ground_truth)} images")
 
     # ONNX session
-    ort_session = ort.InferenceSession(str(args.model_path))
+    session_options = onnxruntime.SessionOptions()
+    # 0 = VERBOSE, 1 = INFO, 2 = WARNING, 3 = ERROR, 4 = FATAL
+    session_options.log_severity_level = 0  # INFO
+    session_options.graph_optimization_level = onnxruntime.GraphOptimizationLevel.ORT_DISABLE_ALL
+    os.environ["ORT_TENSORRT_FP16_ENABLE"] = "1"  # Enable FP16 precision
+    os.environ["ORT_TENSORRT_INT8_ENABLE"] = "1"  # Enable INT8 precision
+    os.environ["ORT_TENSORRT_INT8_CALIBRATION_TABLE_NAME"] = str(args.model_path.parent / "calibration.flatbuffers")  # Calibration table name
+    os.environ["ORT_TENSORRT_ENGINE_CACHE_ENABLE"] = "1"
+    provider = ['TensorrtExecutionProvider'] if 'CUDAExecutionProvider' in onnxruntime.get_available_providers() else ['CPUExecutionProvider']
+    ort_session = onnxruntime.InferenceSession(str(args.model_path), sess_options=session_options, providers=provider)
 
     # Benchmark
     correct_top1 = correct_top5 = total = 0

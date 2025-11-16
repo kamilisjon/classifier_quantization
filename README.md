@@ -10,7 +10,7 @@ This was done by following [ONNX Runtime instructions](https://github.com/micros
 
 ## How to use this? ##
 * [Download and unzip the ImageNet dataset](https://www.image-net.org/download.php).
-    * I did download the whole dataset from linked Kaggle resource. If you can find a better source where you can only download the validation set - great!.
+    * Will need train set for INT8 quantization calibration set amd validation set for benchmarking.
 * Benchmark model on ImageNet validation set.
     * `python .\benchmark_onnx.py "path-to-model" "path-to-imagenet-dataset"`
     * [Here](https://github.com/onnx/models/tree/main/Computer_Vision) you can find many models to experiment with quantization. To see how resilient different models are to quantization. I was using a timm [ResNet18](https://github.com/onnx/models/tree/main/Computer_Vision/resnet18_Opset18_timm) model.

@@ -18,8 +18,8 @@ class CalibDataReader(CalibrationDataReader):
     def rewind(self): self._iter = None
 
 if __name__ == "__main__":
-    model_path = Path("./models/mobilenetv3_small_075/mobilenetv3_small_075_Opset17_dynamic.onnx")
-    calibrate_dataset = Path("C:/Users/kamil/Downloads/calibration_set")
+    model_path = Path("C:/src/classifier_quantization/models/efficientnet_b0/efficientnet_b0_Opset17_dynamic.onnx")
+    calibrate_dataset = Path("C:/Users/kamil/Downloads/uni/tiriamasis/calibration_set")
     augmented_model_path = "./augmented_model.onnx"
     calibrator: CalibraterBase = create_calibrator(model_path, [], augmented_model_path=augmented_model_path)
     calibrator.set_execution_providers(["CUDAExecutionProvider"])

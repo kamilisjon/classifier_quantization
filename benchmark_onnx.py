@@ -7,6 +7,7 @@ import json
 
 import onnxruntime
 import numpy as np
+from tqdm import tqdm
 
 from pre_process import load_and_preprocess
 
@@ -48,58 +49,39 @@ def benchmark_accuracy(session: onnxruntime.InferenceSession, imagenet_data_path
 
     # Parse labels
     labels_csv = imagenet_data_path / "LOC_val_solution.csv"
-    imageid_to_synsets = {}
+    imageid_to_label = {}
     with labels_csv.open("r", newline="") as f:
-        reader = csv.DictReader(f)
+        reader = csv.DictReader(f, delimiter=',')
         for row in reader:
             image_id = row["ImageId"]
             pred_str = row["PredictionString"].strip()
-            if not pred_str:
-                imageid_to_synsets[image_id] = []
-                continue
+            assert pred_str is not None
             tokens = pred_str.split()
             synsets = [tokens[i] for i in range(0, len(tokens), 5)]
-            imageid_to_synsets[image_id] = sorted(set(synsets))
+            assert len(set(synsets)) == 1  # if there are multiple ground-truth labels, they must be the same
+            imageid_to_label[image_id] = synsets[0]
+    assert len(imageid_to_label) == len(images)
 
     # Map synsets
     with open(IMAGENET_LABELS_FILEPATH, "r") as f:
         class_idx = json.load(f)
-    synset_to_idx = {v[0]: int(k) for k, v in class_idx.items()}
-
-    # Build ground_truth
-    ground_truth = []
-    for img_path in images:
-        img_id = img_path.stem
-        if img_id not in imageid_to_synsets:
-            raise ValueError(f"No labels for {img_id}")
-        synsets = imageid_to_synsets[img_id]
-        gt_indices = sorted({synset_to_idx[s] for s in synsets if s in synset_to_idx})
-        if not gt_indices:
-            raise ValueError(f"No mapping for {img_id}")
-        ground_truth.append(gt_indices)
+    gt_label_to_idx = {v[0]: int(k) for k, v in class_idx.items()}
 
     # Benchmark
-    correct_top1 = correct_top5 = total = 0
-    for start in range(0, len(images), batch_size):
-        end = min(start + batch_size, len(images))
-        batch_paths = images[start:end]
-        input_tensor = load_and_preprocess(batch_paths)
-        outputs = session.run(None, {"x": input_tensor})[0]
-        for j, out in enumerate(outputs):
-            i = start + j
-            pred = np.argsort(out)[-5:][::-1]
-            gt_indices = set(ground_truth[i])
+    correct_top1 = correct_top5 = 0
+    for start in tqdm(range(0, len(images), batch_size), desc="Benchmarking Accuracy"):
+        batch_paths = images[start:min(start + batch_size, len(images))]
+        outputs = session.run(None, {"x": load_and_preprocess(batch_paths)})[0]
+        for i in range(len(batch_paths)):
+            pred = np.argsort(outputs[i])[-5:][::-1]
+            gt_label_idx = gt_label_to_idx[imageid_to_label[batch_paths[i].stem]]
 
-            total += 1
-            if pred[0] in gt_indices:
+            if pred[0] == gt_label_idx:
                 correct_top1 += 1
-            if any(p in gt_indices for p in pred):
+            if any(p == gt_label_idx for p in pred):
                 correct_top5 += 1
 
-            if i % 1000 == 0:
-                print(f"Processed {i + 1}/{len(images)}")
-
-    return correct_top1 / total * 100, correct_top5 / total * 100
+    return correct_top1 / len(images) * 100, correct_top5 / len(images) * 100
 
 def benchmark_speed(session: onnxruntime.InferenceSession, batch_size: int):
     input_data = np.zeros((batch_size, 3, 224, 224), np.float32)

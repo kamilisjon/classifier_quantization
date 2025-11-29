@@ -2,17 +2,18 @@ import argparse
 
 import onnx
 
+BATCH_DIM_NAME = "batch"
+
 def convert_model_batch_to_dynamic(model_path):
     model = onnx.load(model_path)
     initializers = [node.name for node in model.graph.initializer]
     inputs = [node for node in model.graph.input if node.name not in initializers]
-    input_name = inputs[0].name if inputs else None
 
     # Set dynamic batch for all inputs
     for inp in inputs:
         shape = inp.type.tensor_type.shape
         if shape.dim and not shape.dim[0].dim_param:
-            shape.dim[0].dim_param = 'N'
+            shape.dim[0].dim_param = BATCH_DIM_NAME
 
     # Infer shapes
     model = onnx.shape_inference.infer_shapes(model, check_type=True, strict_mode=True, data_prop=True)
@@ -22,11 +23,17 @@ def convert_model_batch_to_dynamic(model_path):
         out_shape = out.type.tensor_type.shape
         if out_shape.dim and out_shape.dim[0].HasField('dim_value'):
             out_shape.dim[0].ClearField('dim_value')
-            out_shape.dim[0].dim_param = 'N'
+            out_shape.dim[0].dim_param = BATCH_DIM_NAME
+
+    try:
+        onnx.checker.check_model(model)
+    except Exception as e:
+        print(f"Model validation failed. The model will NOT be saved. Error: {e}")
+        return None
 
     model_name = model_path.rsplit('.', 1)[0] + "_dynamic.onnx"
     onnx.save(model, model_name)
-    return [model_name, input_name]
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('model_path', help='Path to ONNX model')

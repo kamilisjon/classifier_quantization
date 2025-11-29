@@ -71,7 +71,7 @@ def benchmark_accuracy(session: onnxruntime.InferenceSession, imagenet_data_path
     correct_top1 = correct_top5 = 0
     for start in tqdm(range(0, len(images), batch_size), desc="Benchmarking Accuracy"):
         batch_paths = images[start:min(start + batch_size, len(images))]
-        outputs = session.run(None, {"x": load_and_preprocess(batch_paths)})[0]
+        outputs = session.run(None, {"x": load_and_preprocess(batch_paths, batch_size)})[0]
         for i in range(len(batch_paths)):
             pred = np.argsort(outputs[i])[-5:][::-1]
             gt_label_idx = gt_label_to_idx[imageid_to_label[batch_paths[i].stem]]

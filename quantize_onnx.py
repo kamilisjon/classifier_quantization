@@ -49,8 +49,8 @@ class ResNet50DataReader(CalibrationDataReader):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_model", required=True, type=Path)
-    parser.add_argument("--calibrate_dataset", required=True, type=Path)
     parser.add_argument("--benchmark_dataset", required=True, type=Path)
+    parser.add_argument("--calibrate_dataset", required=True, type=Path)
     args = parser.parse_args()
     output_path = str(args.input_model).rsplit('.', 1)[0] + "_int8.onnx"
     dr = ResNet50DataReader(args.calibrate_dataset, str(args.input_model))

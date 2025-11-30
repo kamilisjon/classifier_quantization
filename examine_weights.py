@@ -2,8 +2,6 @@ import argparse
 
 import onnx
 
-
-
 def extract_conv_weights(model_path: str, quant_model_path: str):
     model = onnx.load(model_path)
     conv_weights = {init.name: onnx.numpy_helper.to_array(init).flatten().tolist() for init in model.graph.initializer}

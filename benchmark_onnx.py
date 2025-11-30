@@ -8,6 +8,7 @@ import json
 import onnxruntime
 import numpy as np
 from tqdm import tqdm
+from onnxruntime.quantization import create_calibrator, write_calibration_table, CalibraterBase, CalibrationDataReader
 
 from pre_process import load_and_preprocess
 
@@ -25,8 +26,6 @@ class ExecProvider(Enum):
     def __repr__(self):
         return self.name
 
-BENCHMARK_EXEC_PROVIDERS = [ExecProvider.TRT_INT8, ExecProvider.TRT_FP16, ExecProvider.TRT_FP32, ExecProvider.CUDA]
-
 def setup_session(model_path: Path, exec_provider: ExecProvider) -> onnxruntime.InferenceSession:
     session_options = onnxruntime.SessionOptions()
     session_options.log_severity_level = 0
@@ -42,6 +41,23 @@ def setup_session(model_path: Path, exec_provider: ExecProvider) -> onnxruntime.
                                                   'trt_int8_calibration_table_name': str(model_path.parent / "calibration.flatbuffers")})]
     return onnxruntime.InferenceSession(str(model_path), sess_options=session_options, providers=provider)
 
+def generate_calib_cache(model_path: Path, calib_data_path: Path):
+    class CalibDataReader(CalibrationDataReader):
+        def __init__(self, folder: Path, input_name: str):
+            self.folder, self.input_name, self._iter = folder, input_name, None
+        def get_next(self):
+            if self._iter is None: self._iter = iter(self.folder.iterdir())
+            try: return {self.input_name: load_and_preprocess([next(self._iter)])}
+            except StopIteration: return None
+        def rewind(self): self._iter = None
+
+    print('Generating model INT8 calibration table.')
+    data_reader = CalibDataReader(calib_data_path, input_name=setup_session(model_path, ExecProvider.CPU).get_inputs()[0].name)
+    calibrator: CalibraterBase = create_calibrator(model_path, [], augmented_model_path=str(model_path).rsplit('.', 1)[0] + "_calib_data_collection.onnx")
+    calibrator.collect_data(data_reader)
+    calibration_data = calibrator.compute_data()
+    write_calibration_table(calibration_data, dir=model_path.parent)
+    print('Generated model INT8 calibration table.')
 
 def benchmark_accuracy(session: onnxruntime.InferenceSession, imagenet_data_path: Path, batch_size: int):
     val_dir = imagenet_data_path / 'ILSVRC' / 'Data' / 'CLS-LOC' / "val"
@@ -107,14 +123,17 @@ def benchmark_speed(session: onnxruntime.InferenceSession, batch_size: int):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("model_path", type=Path)
-    parser.add_argument("data_path", type=Path)
     parser.add_argument("batch_size", type=int)
+    parser.add_argument("model_path", type=Path)
+    parser.add_argument("benchmark_data_path", type=Path)
+    parser.add_argument("calib_data_path", type=Path)
     args = parser.parse_args()
     results = {}
-    for exec_provider in BENCHMARK_EXEC_PROVIDERS:
+    for exec_provider in [ExecProvider.TRT_INT8, ExecProvider.TRT_FP16, ExecProvider.TRT_FP32, ExecProvider.CUDA]:
+        if exec_provider == ExecProvider.TRT_INT8:
+            generate_calib_cache(args.model_path, args.calib_data_path)
         session = setup_session(args.model_path, exec_provider)
         speed = benchmark_speed(session, args.batch_size)
-        top1_acc, top5_acc = benchmark_accuracy(session, args.data_path, args.batch_size)
+        top1_acc, top5_acc = benchmark_accuracy(session, args.benchmark_data_path, args.batch_size)
         results[exec_provider] = {"top1_acc": top1_acc, "top5_acc": top5_acc, "speed": round(speed, 3)}
         print(results)

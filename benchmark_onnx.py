@@ -11,7 +11,7 @@ from tqdm import tqdm
 
 from pre_process import load_and_preprocess
 
-WARMUP_RUNS_COUNT = 25
+WARMUP_RUNS_COUNT = 300
 BENCHMARK_RUNS_COUNT = 100
 IMAGENET_LABELS_FILEPATH = "imagenet_class_index.json"
 
@@ -25,7 +25,7 @@ class ExecProvider(Enum):
     def __repr__(self):
         return self.name
 
-BENCHMARK_EXEC_PROVIDERS = [ExecProvider.CUDA, ExecProvider.TRT_FP32, ExecProvider.TRT_FP16, ExecProvider.TRT_INT8]
+BENCHMARK_EXEC_PROVIDERS = [ExecProvider.TRT_INT8, ExecProvider.TRT_FP16, ExecProvider.TRT_FP32, ExecProvider.CUDA]
 
 def setup_session(model_path: Path, exec_provider: ExecProvider) -> onnxruntime.InferenceSession:
     session_options = onnxruntime.SessionOptions()
@@ -117,4 +117,4 @@ if __name__ == "__main__":
         speed = benchmark_speed(session, args.batch_size)
         top1_acc, top5_acc = benchmark_accuracy(session, args.data_path, args.batch_size)
         results[exec_provider] = {"top1_acc": top1_acc, "top5_acc": top5_acc, "speed": round(speed, 3)}
-    print(results)
+        print(results)

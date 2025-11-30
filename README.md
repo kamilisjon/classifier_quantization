@@ -11,6 +11,8 @@ This was done by following [ONNX Runtime instructions](https://github.com/micros
 ## How to use this? ##
 * [Download and unzip the ImageNet dataset](https://www.image-net.org/download.php).
     * Will need train set for INT8 quantization calibration set amd validation set for benchmarking.
+* If model batch size is not dynameic, you will need to change it to dynamic.
+    * `python .\make_batch_size_dynamic.py "path-to-model"`
 * Benchmark model on ImageNet validation set.
     * `python .\benchmark_onnx.py "path-to-model" "path-to-imagenet-dataset"`
     * [Here](https://github.com/onnx/models/tree/main/Computer_Vision) you can find many models to experiment with quantization. To see how resilient different models are to quantization. I was using a timm [ResNet18](https://github.com/onnx/models/tree/main/Computer_Vision/resnet18_Opset18_timm) model.

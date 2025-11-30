@@ -31,8 +31,9 @@ def convert_model_batch_to_dynamic(model_path):
         print(f"Model validation failed. The model will NOT be saved. Error: {e}")
         return None
 
-    model_name = model_path.rsplit('.', 1)[0] + "_dynamic.onnx"
-    onnx.save(model, model_name)
+    new_model_path = model_path.rsplit('.', 1)[0] + "_dynamic.onnx"
+    onnx.save(model, new_model_path)
+    print(f"Models batch size dim (first dim) converted to dynamic. Model saved at {new_model_path}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

@@ -3,12 +3,13 @@ import time
 from pathlib import Path
 from enum import Enum
 import csv
+import os
 import json
 
 import onnxruntime
 import numpy as np
 from tqdm import tqdm
-from onnxruntime.quantization import create_calibrator, write_calibration_table, CalibraterBase, CalibrationDataReader
+from onnxruntime.quantization import create_calibrator, write_calibration_table, CalibraterBase, CalibrationDataReader, CalibrationMethod
 
 from pre_process import load_and_preprocess
 
@@ -41,19 +42,20 @@ def setup_session(model_path: Path, exec_provider: ExecProvider) -> onnxruntime.
                                                   'trt_int8_calibration_table_name': str(model_path.parent / "calibration.flatbuffers")})]
     return onnxruntime.InferenceSession(str(model_path), sess_options=session_options, providers=provider)
 
-def generate_calib_cache(model_path: Path, calib_data_path: Path):
-    class CalibDataReader(CalibrationDataReader):
-        def __init__(self, folder: Path, input_name: str):
-            self.folder, self.input_name, self._iter = folder, input_name, None
-        def get_next(self):
-            if self._iter is None: self._iter = iter(self.folder.iterdir())
-            try: return {self.input_name: load_and_preprocess([next(self._iter)])}
-            except StopIteration: return None
-        def rewind(self): self._iter = None
+class CalibDataReader(CalibrationDataReader):
+    def __init__(self, folder: Path, input_name: str):
+        self.folder, self.input_name, self._iter = folder, input_name, None
+    def get_next(self):
+        if self._iter is None: self._iter = iter(self.folder.iterdir())
+        try: return {self.input_name: load_and_preprocess([next(self._iter)])}
+        except StopIteration: return None
+    def rewind(self): self._iter = None
 
+def generate_calib_cache(model_path: Path, calib_data_path: Path):
     print('Generating model INT8 calibration table.')
+    os.environ["QUANTIZATION_DEBUG"] = "1" 
     data_reader = CalibDataReader(calib_data_path, input_name=setup_session(model_path, ExecProvider.CPU).get_inputs()[0].name)
-    calibrator: CalibraterBase = create_calibrator(model_path, [], augmented_model_path=str(model_path).rsplit('.', 1)[0] + "_calib_data_collection.onnx")
+    calibrator: CalibraterBase = create_calibrator(model_path, [], calibrate_method=CalibrationMethod.MinMax, augmented_model_path=str(model_path).rsplit('.', 1)[0] + "_calib_data_collection.onnx")
     calibrator.collect_data(data_reader)
     calibration_data = calibrator.compute_data()
     write_calibration_table(calibration_data, dir=model_path.parent)

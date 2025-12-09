@@ -3,7 +3,6 @@ from pathlib import Path
 
 from onnxruntime.quantization import QuantFormat, QuantType, quantize_static
 
-from pre_process import load_and_preprocess
 from benchmark_onnx import ExecProvider, setup_session, benchmark_accuracy, CalibDataReader
 
 if __name__ == "__main__":
